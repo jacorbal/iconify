@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# Select a window by using 'xwininfo' and call 'iconify' on it.
+
+ICONIFY_BIN="${HOME}/.local/bin/iconify"
+
+if [ ! -x "${ICONIFY_BIN}" ]; then
+    echo "Error: could not find '${ICONIFY_BIN}'" >&2
+    exit 1
+fi
+
+${ICONIFY_BIN} "$(xwininfo | grep 'Window id' | awk '{print $4}')"
