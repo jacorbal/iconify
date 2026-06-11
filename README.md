@@ -84,25 +84,35 @@ Giving a window ID, use the program:
     $ iconify [<options>] <window_id>
 
 How to implement it on any window manager?  By calling a script that
-invokes `xwininfo`, getting the window identifier and passing it to
-`iconify`.  For example, let's call this script `iconify_sel`:
+invokes `xdotool` or `xwininfo`, getting the window identifier and passing it
+to `iconify`.  For example, let's call this script `iconify_sel`:
 
     #!/bin/sh
 
-    ICONIFY_BIN="${HOME}/.local/bin/iconify"
-
-    if [ ! -x "${ICONIFY_BIN}" ]; then
-        echo "Error: could not find '${ICONIFY_BIN}'" >&2
+    if ! command -v iconify >/dev/null 2>&1; then
+        echo "Error: could not find 'iconify' on PATH" >&2
         exit 1
     fi
 
-    ${ICONIFY_BIN} "$(xwininfo | grep 'Window id' | awk '{print $4}')"
+    # Try 'xdotool'
+    if command -v xdotool >/dev/null 2>&1; then
+        CUR_WIN_ID="$(xdotool getactivewindow 2>/dev/null || true)"
+    fi
+
+    # Fallback to 'xwininfo'
+    if [ -z "${CUR_WIN_ID}" ]; then
+        CUR_WIN_ID="$(xwininfo 2>/dev/null | awk '/Window id:/ {print $4; exit}')"
+    fi
+
+    iconify "${CUR_WIN_ID}"
 
 Now, add to your window manager a keybinding or a mousebinding, for
-example, `Ctrl+Shift+S` to call the script, and click on the window you
+example, `Ctrl+Shift+D` to call the script, and click on the window you
 want to iconize.
 
 I guess that the script could be modified if the window ID could be
 taken from the WM itself, and implementing the `iconify` on
 a mousebinding, such as, `Ctrl+Alt+Click` on the window, or adding a new
-button on the window decoration to iconize.
+button on the window decoration to iconize.  With `xdotool`, the window
+ID is taken from current active window, and if it cannot be found, it
+calls `xwininfo` to select manually which window.

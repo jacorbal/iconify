@@ -9,16 +9,17 @@
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all copies.
+ * above copyright notice and this permission notice appear in all
+ * copies.
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
  * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
  * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
  * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
- * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
- * THIS SOFTWARE.
+ * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ * PERFORMANCE OF THIS SOFTWARE.
  */
 
 /* Enable features from the POSIX.1-2008 standard */
@@ -35,15 +36,56 @@
 #include <X11/Xlib.h>   /* Bool, False, True, Display, Pixmap, Window, X* */
 #include <X11/xpm.h>    /* XClassHint, XGetPIxel, XSetStandardProperties */
 
-/* To avoid including <X11/Xatom.h> just for the definition of 'XA_ATOM' */
+/* To avoid including <X11/Xatom.h> just for the sake of the
+ * definitions of 'XA_ATOM' and 'XA_CARDINAL' */
 #ifndef XA_ATOM
 #define XA_ATOM ((Atom) 4)
+#endif
+#ifndef XA_CARDINAL
+#define XA_CARDINAL ((Atom) 5)
 #endif
 
 /* Local includes */
 #include <defaults.h>
 #include <iconify.h>
 
+
+/**/
+static Bool window_is_iconic(Display *display, Window window)
+{
+    Atom wm_state;
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems, bytes_after;
+    unsigned char *data = NULL;
+    long state;
+    Bool iconic = False;
+
+    wm_state = XInternAtom(display, "WM_STATE", False);
+    if (wm_state == None) {
+        return False;
+    }
+
+    if (XGetWindowProperty(display, window, wm_state,
+                           0, 2, False, wm_state,
+                           &actual_type, &actual_format,
+                           &nitems, &bytes_after,
+                           &data) != Success) {
+        return False;
+    }
+
+    if (data != NULL && actual_type == wm_state &&
+            actual_format == 32 && nitems >= 1) {
+        state = ((long *) data)[0];
+        iconic = (state == WIN_STATE_ICONIC);
+    }
+
+    if (data != NULL) {
+        XFree(data);
+    }
+
+    return iconic;
+}
 
 /* Initialize a new icon */
 icon_td *icon_init(Display *display, Window window_orig,
@@ -112,13 +154,18 @@ void icon_destroy(icon_td *icon)
 }
 
 
-/* Create new icon window */
 void icon_create(icon_td *icon)
 {
     XWindowAttributes attributes;
     Window current_window = icon->window_orig;
     int absolute_x = 0;
     int absolute_y = 0;
+    unsigned int window_height;
+    Window root;
+    Window parent;
+    Window *children;
+    unsigned int num_children;
+    XSetWindowAttributes windowAttributes;
 
     /* Follow window hierarchy until root to get absolute coordinates */
     while (current_window != 0) {
@@ -137,11 +184,6 @@ void icon_create(icon_td *icon)
         }
 
         /* Get parent window until root window */
-        Window root;
-        Window parent;
-        Window *children;
-        unsigned int num_children;
-
         /* Get widnow hierarchy */
         if (XQueryTree(icon->display, current_window, &root, &parent,
                     &children, &num_children)) {
@@ -158,7 +200,7 @@ void icon_create(icon_td *icon)
     icon->y_pos = (absolute_y < 0) ? 240 : absolute_y;
 
     /* Set icon height depending on whether text is displayed or not */
-    unsigned int window_height = icon->height +
+    window_height = icon->height +
         ((icon->show_text) ? DEFAULT_TEXT_HEIGHT : 0) + 2 * icon->border;
 
     /* Create icon by reading original window coordinates (top, left) */
@@ -169,38 +211,95 @@ void icon_create(icon_td *icon)
             BlackPixel(icon->display, 0), WhitePixel(icon->display, 0));
 
     /* Set the 'override_redirect' property: no WM interference */
-    XSetWindowAttributes windowAttributes;
-    windowAttributes.override_redirect = True;
+    windowAttributes.override_redirect = False;
     XChangeWindowAttributes(icon->display, icon->window,
             CWOverrideRedirect, &windowAttributes);
-
-    /* Make sure the icon window is on the desktop, and not above it */
-    Atom wm_window_type = XInternAtom(icon->display,
-            "_NET_WM_WINDOW_TYPE", False);
-    Atom wm_window_type_desktop = XInternAtom(icon->display,
-            "_NET_WM_WINDOW_TYPE_DESKTOP", False);
-    XChangeProperty(icon->display, icon->window, wm_window_type,
-            XA_ATOM, 32/*bits*/, PropModeReplace,
-            (unsigned char *) &wm_window_type_desktop, 1);
-
-    /* Just to make sure the icon cannot be on top of other windows */
-    Atom wm_state = XInternAtom(icon->display, "_NET_WM_STATE", False);
-    Atom wm_state_lower = XInternAtom(icon->display,
-            "_NET_WM_STATE_BELOW", False);
-    XChangeProperty(icon->display, icon->window, wm_state, XA_ATOM,
-            32, PropModeReplace, (unsigned char *) &wm_state_lower, 1);
 
     /* Set window properties */
     XSetStandardProperties(icon->display, icon->window,
             icon->prog_name, "Unknown", None, NULL, 0, NULL);
-    
+
+    {
+        Atom motif_hints = XInternAtom(icon->display,
+                "_MOTIF_WM_HINTS", False);
+
+        struct {
+            unsigned long flags;
+            unsigned long functions;
+            unsigned long decorations;
+            long input_mode;
+            unsigned long status;
+        } hints = { 2, 0, 0, 0, 0 };
+
+        XChangeProperty(icon->display,
+                icon->window,
+                motif_hints,
+                motif_hints,
+                32/*bits*/,
+                PropModeReplace,
+                (unsigned char *) &hints,
+                5);
+    }
+
+    {
+        XSizeHints size_hints;
+
+        size_hints.flags = PMinSize | PMaxSize;
+        size_hints.min_width  = (int)(icon->width + 2 * icon->border);
+        size_hints.max_width  = (int)(icon->width + 2 * icon->border);
+        size_hints.min_height = (int)window_height;
+        size_hints.max_height = (int)window_height;
+
+        XSetWMNormalHints(icon->display, icon->window, &size_hints);
+    }
+
     /* Input events */
     XSelectInput(icon->display, icon->window,
             ExposureMask        |   ButtonPressMask     |
             ButtonReleaseMask   |   PointerMotionMask);
+    XSelectInput(icon->display, icon->window_orig,
+             StructureNotifyMask | PropertyChangeMask);
 
     /* Draw the icon */
     icon_draw(icon);
+
+    /* Bind the icon window to the current desktop only */
+    Atom net_wm_desktop = XInternAtom(icon->display,
+            "_NET_WM_DESKTOP", False);
+    if (net_wm_desktop != None && icon->desktop_cur >= 0) {
+        XChangeProperty(icon->display,
+                icon->window,
+                net_wm_desktop,
+                XA_CARDINAL,
+                32/*bits*/,
+                PropModeReplace,
+                (unsigned char *) &icon->desktop_cur,
+                1);
+    }
+
+    /* Keep icon below other windows and out of taskbar/pager */
+    {
+        Atom net_wm_state;
+        Atom states[3];
+
+        net_wm_state = XInternAtom(icon->display,
+                "_NET_WM_STATE", False);
+        states[0] = XInternAtom(icon->display,
+                "_NET_WM_STATE_BELOW", False);
+        states[1] = XInternAtom(icon->display,
+                "_NET_WM_STATE_SKIP_TASKBAR", False);
+        states[2] = XInternAtom(icon->display,
+                "_NET_WM_STATE_SKIP_PAGER", False);
+
+        XChangeProperty(icon->display,
+                icon->window,
+                net_wm_state,
+                XA_ATOM,
+                32/*bits*/,
+                PropModeReplace,
+                (unsigned char *) states,
+                3);
+    }
 
     /* Show icon and put it on desktop layer */
     XMapWindow(icon->display, icon->window);
@@ -283,10 +382,54 @@ void icon_draw(icon_td *icon)
 }
 
 
+/* Get actual active desktop for the icon */
+void icon_update_cur_desktop(icon_td *icon)
+{
+    Display *display = icon->display;
+    int screen = DefaultScreen(display);
+    Window root = RootWindow(display, screen);
+    unsigned long nitems, leftover;
+    unsigned char *data = NULL;
+    int actual_format;
+    Atom actual_type;
+    Atom net_wm;
+
+    /* Get atom _NET_CURRENT_DESKTOP */
+    net_wm = XInternAtom(display, "_NET_CURRENT_DESKTOP", True);
+    if (net_wm == None) {
+        fprintf(stderr, "Failed to get atom _NET_CURRENT_DESKTOP\n");
+        return;
+    }
+
+    /* Get current desktop property */
+    if (XGetWindowProperty(display, root, net_wm, 0L, 1,
+                False, AnyPropertyType,
+                &actual_type, &actual_format,
+                &nitems, &leftover, &data) != Success) {
+        fprintf(stderr, "Failed to get desktop property\n");
+        return;
+    }
+
+    if (nitems > 0) {
+        /* Set number of desktop on icon structure */
+        icon->desktop_cur = *(long *) data;
+    } else {
+        fprintf(stderr, "Invalid desktop number: nitems: %lu\n", nitems);
+        icon->desktop_cur = -1;
+    }
+
+    /* Deallocate memory */
+    if (data) {
+        XFree(data);
+    }
+}
+
+
 /* Load icon given original window */
 Pixmap icon_load(Display *display, const char *path, Window window_orig)
 {
     Pixmap pixmap = None;
+    XClassHint class_hint;
 
     /* Try to load icon using path and load it if exists */
     if (access(path, F_OK) != -1) {
@@ -297,12 +440,11 @@ Pixmap icon_load(Display *display, const char *path, Window window_orig)
     }
 
     /* Try to load icon by using the original window class */
-    XClassHint class_hint;
     if (XGetClassHint(display, window_orig, &class_hint)) {
+        struct stat buffer;
         char icon_name[MAX_APP_NAME_LENGTH];
         snprintf(icon_name, sizeof(icon_name),
                 "/usr/share/pixmaps/%s.xpm", class_hint.res_class);
-        struct stat buffer;
         if (stat(icon_name, &buffer) == 0) {
             /* If exists, load it */
             if (XpmReadFileToPixmap(display, DefaultRootWindow(display),
@@ -333,6 +475,9 @@ Pixmap pixmap_scale(Display *display, Pixmap pixmap_orig,
                     unsigned int width_old, unsigned int height_old,
                     unsigned int width_new, unsigned int height_new)
 {
+    double x_ratio;
+    double y_ratio;
+
     /* Create a new pixmap for the scaled image */
     Pixmap scaled_pixmap = XCreatePixmap(display,
             DefaultRootWindow(display), width_new, height_new,
@@ -348,15 +493,15 @@ Pixmap pixmap_scale(Display *display, Pixmap pixmap_orig,
             width_new, height_new);
 
     /* Calculate scaling factors */
-    double x_ratio = (double)width_old / (double)width_new;
-    double y_ratio = (double)height_old / (double)height_new;
+    x_ratio = (double) width_old / (double) width_new;
+    y_ratio = (double) height_old / (double) height_new;
 
     /* Scale the image by providing the scaled coordinates */
     for (unsigned int y = 0; y < height_new; ++y) {
         for (unsigned int x = 0; x < width_new; ++x) {
             // Calculate the source coordinates in the original pixmap
-            int src_x = (int)(x * x_ratio);
-            int src_y = (int)(y * y_ratio);
+            int src_x = (int) (x * x_ratio);
+            int src_y = (int) (y * y_ratio);
             
             /* Copy a 1x1px from the original pixmap to the scaled pixmap */
             XCopyArea(display, pixmap_orig, scaled_pixmap, gc,
@@ -381,12 +526,29 @@ void events_handle(icon_td *icon)
 
     while (True) {
         XNextEvent(icon->display, &event);
+
+        /* If the original window is restored by the WM or by any external
+         * tool, remove this icon and exit. This check must happen before
+         * handling icon-window events. */
+        if (event.xany.window == icon->window_orig) {
+            if (!window_is_iconic(icon->display, icon->window_orig)) {
+                if (icon->window != None) {
+                    XDestroyWindow(icon->display, icon->window);
+                    icon->window = None;
+                }
+                XFlush(icon->display);
+                break;
+            }
+            continue;
+        }
+
         if (event.type == ClientMessage &&
-                event.xclient.data.l[0] ==
-                    (unsigned int) XInternAtom(icon->display,
-                        "WM_DELETE_WINDOW", False)) {
+            event.xclient.data.l[0] ==
+            (unsigned int) XInternAtom(icon->display,
+                "WM_DELETE_WINDOW", False)) {
             break;
         }
+
         if (event.type == ButtonPress) {
             if (event.xbutton.button == Button1) {
                 dragging = True;
@@ -397,7 +559,7 @@ void events_handle(icon_td *icon)
             if (event.xbutton.button == Button1) {
                 dragging = False;
                 if (abs(event.xbutton.x - x_drag_start) <= 5 &&
-                        abs(event.xbutton.y - y_drag_start) <= 5) {
+                    abs(event.xbutton.y - y_drag_start) <= 5) {
                     static Time last_click_time = 0;
                     if (event.xbutton.time - last_click_time <= 500) {
                         window_restore(icon);
@@ -411,7 +573,7 @@ void events_handle(icon_td *icon)
             int y_new = event.xmotion.y_root - y_drag_start;
             XMoveWindow(icon->display, icon->window, x_new, y_new);
         } else if (event.type == Expose) {
-            icon_draw(icon);    /* Re-draws the displayed icon */
+            icon_draw(icon);
         }
     }
 }
@@ -420,6 +582,15 @@ void events_handle(icon_td *icon)
 /* Restores original window and closes icon */
 void window_restore(icon_td *icon)
 {
-    XUnmapWindow(icon->display, icon->window);
+    icon_update_cur_desktop(icon);
+
     XMapWindow(icon->display, icon->window_orig);
+    XRaiseWindow(icon->display, icon->window_orig);
+
+    if (icon->window != None) {
+        XDestroyWindow(icon->display, icon->window);
+        icon->window = None;
+    }
+
+    XFlush(icon->display);
 }

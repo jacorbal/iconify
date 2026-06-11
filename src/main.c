@@ -34,11 +34,15 @@
  * THIS SOFTWARE.
  */
 
+/* Enable features from the POSIX.1-2008 standard */
+#define _POSIX_C_SOURCE 200809L
+
+
 /* Standard library includes */
-#include <getopt.h>     /* getopt, optarg, optind */
 #include <locale.h>     /* setlocale */
 #include <stdio.h>      /* fprintf, sscanf */
 #include <stdlib.h>     /* atoi, exit */
+#include <unistd.h>     /* getopt, optarg, optind */
 
 /* X includes */
 #include <X11/Xlib.h>   /* Bool, False, True, Display, Pixmap, Window, X* */
@@ -49,7 +53,7 @@
 
 
 /* Convert hexadecimal color string into unsigned long */
-static unsigned long _hex_to_ulong(const char *color_str)
+static unsigned long s_hex_to_ulong(const char *color_str)
 {
     unsigned long color;
     sscanf(color_str, "%lx", &color);
@@ -58,7 +62,7 @@ static unsigned long _hex_to_ulong(const char *color_str)
 
 
 /* Show help */
-void _help_show(FILE *fp, const char basename[])
+static inline void s_help_show(FILE *fp, const char basename[])
 {
     fprintf(fp, "Usage: %s [<options>] <window_id>\n", basename);
     fprintf(fp, "Options:\n");
@@ -90,15 +94,17 @@ int main(int argc, char *argv[])
     unsigned long fg = DEFAULT_TEXT_FG;
     unsigned long fc = DEFAULT_TEXT_FC;
     Bool show_text = True;
+    Display *display;
+    Window window_orig;
+    Pixmap pixmap;
     int opt;
 
     setlocale(LC_ALL, "");
     while ((opt = getopt(argc, argv, "hn:W:H:i:s:F:B:f:b:t")) != -1) {
         switch (opt) {
             case 'h':
-                _help_show(stdout, argv[0]);
+                s_help_show(stdout, argv[0]);
                 exit(EXIT_SUCCESS);
-                break;
             case 'n':
                 prog_name = optarg;
                 break;
@@ -116,13 +122,13 @@ int main(int argc, char *argv[])
                 height = width;
                 break;
             case 'F':
-                fg = _hex_to_ulong(optarg);
+                fg = s_hex_to_ulong(optarg);
                 break;
             case 'f':
-                fc = _hex_to_ulong(optarg);
+                fc = s_hex_to_ulong(optarg);
                 break;
             case 'B':
-                bg = _hex_to_ulong(optarg);
+                bg = s_hex_to_ulong(optarg);
                 break;
             case 'b':
                 border = atoi(optarg);
@@ -131,36 +137,36 @@ int main(int argc, char *argv[])
                 show_text = False;
                 break;
             default:
-                _help_show(stderr, argv[0]);
+                s_help_show(stderr, argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
 
     if (optind >= argc) {
-        _help_show(stderr, argv[0]);
+        s_help_show(stderr, argv[0]);
         exit(EXIT_FAILURE);
     }
     
-    Window window_orig = (Window) strtoul(argv[optind], NULL, 0);
+    window_orig = (Window) strtoul(argv[optind], NULL, 0);
     if (window_orig == 0) {
         fprintf(stderr, "Error: original window ID is not valid\n");
         exit(EXIT_FAILURE);
     }
     
-    Display *display = XOpenDisplay(NULL);
+    display = XOpenDisplay(NULL);
     if (!display) {
         fprintf(stderr, "Error: could not open display\n");
         exit(EXIT_FAILURE);
     }
 
-    Pixmap pixmap = icon_load(display, path, window_orig);
+    pixmap = icon_load(display, path, window_orig);
     if (pixmap == None) {
         fprintf(stderr, "Error: could not load icon\n");
         XCloseDisplay(display);
         exit(EXIT_FAILURE);
     }
 
-    // Inicializar el icono
+    /* Initialize icon */
     icon = icon_init(display, window_orig, pixmap, prog_name, path,
             (unsigned int) border,
             (unsigned int) width, (unsigned int) height,

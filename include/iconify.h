@@ -15,46 +15,57 @@
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all copies.
+ * above copyright notice and this permission notice appear in all
+ * copies
  *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
  * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
  * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
  * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
- * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
- * THIS SOFTWARE.
+ * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+ * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef ICONIFIY_H
-#define ICONIFIY_H
+#ifndef ICONIFY_H
+#define ICONIFY_H
 
 /* X includes */
 #include <X11/Xlib.h>   /* Bool, Display, Pixmap, Window */
+
+/* Window states */
+#define WIN_STATE_WITHDRAWN (0)
+#define WIN_STATE_NORMAL (1)
+#define WIN_STATE_ICONIC (3)
 
 
 /**
  * @typedef icon_td
  *
  * @brief Icon structure and association to the original window
+ *
+ * The icon is in every desktop, but the parameter @p desktop_cur
+ * saves the actual active desktop on view, so the window, when
+ * restored, will appear in the same desktop the icon was destroyed.
  */
 typedef struct {
     Display *display;       /**< X Display */
-    Window window_orig;     /**< Icon associated window */
+    Window window_orig;     /**< Window associated to the icon */
     Window window;          /**< Icon window */
     Pixmap pixmap;          /**< Icon pixmap */
     char *prog_name;        /**< Name of the associated program */
     char *path;             /**< Icon path */
     unsigned int border;    /**< Icon border (px) */
     unsigned int width;     /**< Icon width (px) */
-    unsigned int height;    /**< Icon heght (px) */
+    unsigned int height;    /**< Icon height (px) */
     int x_pos;              /**< Icon X initial position */
     int y_pos;              /**< Icon Y initial position */
     unsigned long bg;       /**< Text background color */
     unsigned long fg;       /**< Text foreground color */
     unsigned long fc;       /**< Frame color */
     Bool show_text;         /**< Display text under icon */
+    long int desktop_cur;   /**< Desktop the icon is now */
 } icon_td;
 
 
@@ -103,11 +114,21 @@ void icon_create(icon_td *icon);
 void icon_draw(icon_td *icon);
 
 /**
+ * @brief Get current desktop the icon is in
+ *
+ * @param icon Icon to get the desktop from
+ *
+ * @note The icon is in all desktops, this funcion just changes the icon
+ *       field @p desktop_cur and updates it to the active desktop
+ */
+void icon_update_cur_desktop(icon_td *icon);
+
+/**
  * @brief Load icon for given window
  *
  * @param display     Display where to load the icon
  * @param path        Icon full path
- * @param widnow_orig Original associated window
+ * @param window_orig Original associated window
  *
  * @return Loaded icon as pixmap, or default icon, or @c None otherwise
  */
@@ -137,7 +158,7 @@ Pixmap pixmap_scale(Display *display, Pixmap pixmap_orig,
 void events_handle(icon_td *icon);
 
 /**
- * @brief Restores original window and closes icon
+ * @brief Restore original window and closes icon
  *
  * @param icon Icon to be closed
  *
@@ -146,4 +167,4 @@ void events_handle(icon_td *icon);
 void window_restore(icon_td *icon);
 
 
-#endif /* ! ICONIFIY_H */
+#endif /* ! ICONIFY_H */

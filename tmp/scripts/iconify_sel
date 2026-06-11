@@ -1,12 +1,22 @@
 #!/bin/sh
 #
-# Select a window by using 'xwininfo' and call 'iconify' on it.
+# Select a window by using 'xdtool' or 'xwininfo' and call 'iconify' on it.
 
-ICONIFY_BIN="${HOME}/.local/bin/iconify"
-
-if [ ! -x "${ICONIFY_BIN}" ]; then
-    echo "Error: could not find '${ICONIFY_BIN}'" >&2
+if ! command -v iconify >/dev/null 2>&1; then
+    echo "Error: could not find 'iconify' on PATH" >&2
     exit 1
 fi
 
-${ICONIFY_BIN} "$(xwininfo | grep 'Window id' | awk '{print $4}')"
+# Try to get the active window ID using 'xdotool' if it is available.
+# If that fails or returns an empty value, fall back to 'xwininfo' and
+# let the user select a window manually.
+if command -v xdotool >/dev/null 2>&1; then
+    CUR_WIN_ID="$(xdotool getactivewindow 2>/dev/null || true)"
+fi
+
+# Fallback to 'xwininfo'
+if [ -z "${CUR_WIN_ID}" ]; then
+    CUR_WIN_ID="$(xwininfo 2>/dev/null | awk '/Window id:/ {print $4; exit}')"
+fi
+
+iconify "${CUR_WIN_ID}"
