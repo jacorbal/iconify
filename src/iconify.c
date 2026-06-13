@@ -4,22 +4,28 @@
  * @brief Window iconify implementation
  */
 /*
- * ISC License
- * Copyright (c) 2025, J. A. Corbal <jacorbal@gmail.com>
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * The MIT License (MIT)
+ * 
+ * Copyright (c) 2025-2026, J. A. Corbal <jacorbal@gmail.com>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * “Software”), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /* Enable features from the POSIX.1-2008 standard */
@@ -87,12 +93,116 @@ static Bool window_is_iconic(Display *display, Window window)
     return iconic;
 }
 
+
+/**/
+static void tooltip_ensure_created(icon_td *icon)
+{
+    XSetWindowAttributes attrs;
+
+    if (icon->tooltip_window != None) {
+        return;
+    }
+
+    attrs.override_redirect = True;
+    attrs.background_pixel = icon->bg;
+    attrs.border_pixel = icon->fc;
+
+    icon->tooltip_window = XCreateWindow(
+        icon->display,
+        DefaultRootWindow(icon->display),
+        0, 0,
+        10, 10,
+        1,
+        CopyFromParent,
+        InputOutput,
+        CopyFromParent,
+        CWOverrideRedirect | CWBackPixel | CWBorderPixel,
+        &attrs
+    );
+
+    XSelectInput(icon->display, icon->tooltip_window, ExposureMask);
+}
+
+
+/**/
+static void tooltip_draw(icon_td *icon)
+{
+    GC gc;
+    int padding_x = 6;
+    int padding_y = 4;
+    int text_w;
+    int text_h = 16;
+    int win_w;
+    int win_h;
+    size_t len;
+
+    if (icon->tooltip_window == None || icon->prog_name == NULL) {
+        return;
+    }
+
+    len = strlen(icon->prog_name);
+    text_w = (int)len * 8;   /* aproximación simple */
+    win_w = text_w + 2 * padding_x;
+    win_h = text_h + 2 * padding_y;
+
+    XResizeWindow(icon->display, icon->tooltip_window,
+                  (unsigned int)win_w, (unsigned int)win_h);
+
+    gc = XCreateGC(icon->display, icon->tooltip_window, 0, NULL);
+
+    XSetForeground(icon->display, gc, icon->bg);
+    XFillRectangle(icon->display, icon->tooltip_window, gc, 0, 0,
+                   (unsigned int)win_w, (unsigned int)win_h);
+
+    XSetForeground(icon->display, gc, icon->fg);
+    XDrawString(icon->display, icon->tooltip_window, gc,
+                padding_x, padding_y + 12,
+                icon->prog_name, (int)len);
+
+    XFreeGC(icon->display, gc);
+}
+
+
+/**/
+static void tooltip_show(icon_td *icon, int x_root, int y_root)
+{
+    int x = x_root + 12;
+    int y = y_root + 20;
+
+    if (!icon->show_tooltip || icon->prog_name == NULL) {
+        return;
+    }
+
+    tooltip_ensure_created(icon);
+    tooltip_draw(icon);
+
+    XMoveWindow(icon->display, icon->tooltip_window, x, y);
+
+    if (!icon->is_tooltip_visible) {
+        XMapRaised(icon->display, icon->tooltip_window);
+        icon->is_tooltip_visible = True;
+    } else {
+        XRaiseWindow(icon->display, icon->tooltip_window);
+    }
+}
+
+
+/**/
+static void tooltip_hide(icon_td *icon)
+{
+    if (icon->tooltip_window != None && icon->is_tooltip_visible) {
+        XUnmapWindow(icon->display, icon->tooltip_window);
+        icon->is_tooltip_visible = False;
+    }
+}
+
+
 /* Initialize a new icon */
 icon_td *icon_init(Display *display, Window window_orig,
         Pixmap pixmap, char *prog_name, const char *path,
         unsigned int border, unsigned int width, unsigned int height,
         unsigned long text_bg, unsigned long text_fg,
-        unsigned long frame_c, Bool show_text)
+        unsigned long frame_c, Bool show_text, Bool show_tooltip)
 {
     icon_td *icon;
 
@@ -116,6 +226,9 @@ icon_td *icon_init(Display *display, Window window_orig,
     icon->fg = text_fg;     /* Text foreground color */
     icon->fc = frame_c;     /* Frame color */
     icon->show_text = show_text;
+    icon->tooltip_window = None;
+    icon->show_tooltip = show_tooltip;
+    icon->is_tooltip_visible = False;
 
     /* Use program name to set the name of icon window */
     if (prog_name) {
@@ -140,6 +253,10 @@ icon_td *icon_init(Display *display, Window window_orig,
 void icon_destroy(icon_td *icon)
 {
     if (icon) {
+        if (icon->tooltip_window != None) {
+            XDestroyWindow(icon->display, icon->tooltip_window);
+        }
+
         if (icon->pixmap) {
             XFreePixmap(icon->display, icon->pixmap);
         }
@@ -256,7 +373,8 @@ void icon_create(icon_td *icon)
     /* Input events */
     XSelectInput(icon->display, icon->window,
             ExposureMask        |   ButtonPressMask     |
-            ButtonReleaseMask   |   PointerMotionMask);
+            ButtonReleaseMask   |   PointerMotionMask   |
+            LeaveWindowMask);
     XSelectInput(icon->display, icon->window_orig,
              StructureNotifyMask | PropertyChangeMask);
 
@@ -532,6 +650,8 @@ void events_handle(icon_td *icon)
          * handling icon-window events. */
         if (event.xany.window == icon->window_orig) {
             if (!window_is_iconic(icon->display, icon->window_orig)) {
+                tooltip_hide(icon);
+
                 if (icon->window != None) {
                     XDestroyWindow(icon->display, icon->window);
                     icon->window = None;
@@ -546,10 +666,12 @@ void events_handle(icon_td *icon)
             event.xclient.data.l[0] ==
             (unsigned int) XInternAtom(icon->display,
                 "WM_DELETE_WINDOW", False)) {
+            tooltip_hide(icon);
             break;
         }
 
         if (event.type == ButtonPress) {
+            tooltip_hide(icon);
             if (event.xbutton.button == Button1) {
                 dragging = True;
                 x_drag_start = event.xbutton.x;
@@ -562,18 +684,35 @@ void events_handle(icon_td *icon)
                     abs(event.xbutton.y - y_drag_start) <= 5) {
                     static Time last_click_time = 0;
                     if (event.xbutton.time - last_click_time <= 500) {
+                        tooltip_hide(icon);
                         window_restore(icon);
                         break;
                     }
                     last_click_time = event.xbutton.time;
                 }
             }
-        } else if (event.type == MotionNotify && dragging) {
-            int x_new = event.xmotion.x_root - x_drag_start;
-            int y_new = event.xmotion.y_root - y_drag_start;
-            XMoveWindow(icon->display, icon->window, x_new, y_new);
+        } else if (event.type == MotionNotify) {
+            if (dragging) {
+                int x_new = event.xmotion.x_root - x_drag_start;
+                int y_new = event.xmotion.y_root - y_drag_start;
+
+                tooltip_hide(icon);
+                XMoveWindow(icon->display, icon->window, x_new, y_new);
+            } else {
+                tooltip_show(icon,
+                        event.xmotion.x_root,
+                        event.xmotion.y_root);
+            }
+
+        } else if (event.type == LeaveNotify) {
+            tooltip_hide(icon);
+
         } else if (event.type == Expose) {
-            icon_draw(icon);
+            if (event.xexpose.window == icon->window) {
+                icon_draw(icon);
+            } else if (event.xexpose.window == icon->tooltip_window) {
+                tooltip_draw(icon);
+            }
         }
     }
 }

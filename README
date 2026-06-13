@@ -28,7 +28,8 @@ Missing features
 Dependencies
 ------------
 
-  - `X11`
+  - X11
+  - `libxpm-dev`
 
 Advantages of iconizing
 -----------------------
@@ -107,12 +108,13 @@ to `iconify`.  For example, let's call this script `iconify_sel`:
     iconify "${CUR_WIN_ID}"
 
 Now, add to your window manager a keybinding or a mousebinding, for
-example, `Ctrl+Shift+D` to call the script, and click on the window you
-want to iconize.
+example, `Ctrl+Shift+D` to call the script.  Then, the current active
+window will turn into an icon if using `xdtool`, or click on the window
+you want to iconize if it fallbacks to `xwininfo`.
 
 I guess that the script could be modified if the window ID could be
 taken from the WM itself, and implementing the `iconify` on
-a mousebinding, such as, `Ctrl+Alt+Click` on the window, or adding a new
-button on the window decoration to iconize.  With `xdotool`, the window
-ID is taken from current active window, and if it cannot be found, it
-calls `xwininfo` to select manually which window.
+a mousebinding, such as, `Ctrl+Alt+Left_Click` on the window, or adding
+a new button on the window decoration to iconize.  With `xdotool`, the
+window ID is taken from current active window, and if it cannot be
+found, it calls `xwininfo` to select manually which window.

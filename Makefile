@@ -72,8 +72,8 @@ ldflags:
 	@echo $(LDFLAGS)
 
 clean-obj:
-	@rm -f $(OBJS) $(DEPS)
-	@rmdir $(O_DIR)
+	@-rm -f $(OBJS) $(DEPS)
+	@-rmdir $(O_DIR)
 
 clean-bin:
 	@-rm -f $(TARGET)

@@ -5,27 +5,34 @@
  *
  * @author J. A. Corbal <jacorbal@gmail.com>
  *
- * @version 0.1.0
- * @date Creation date: Sun Mar 16 01:48:58 AM UTC 2025
- * @date Last update: Sun Mar 16 01:48:58 AM UTC 2025
+ * @version 1.0.2
+ * @date Creation date: Sun Mar 16 01:48:58 UTC 2025
+ * @date Version 1.0.1: Sun Mar 16 01:48:58 UTC 2025
+ * @date Version 1.0.2: Sat Jun 13 15:50:23 UTC 2026
  */
 /*
- * ISC License
- * Copyright (c) 2025, J. A. Corbal <jacorbal@gmail.com>
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * The MIT License (MIT)
+ * 
+ * Copyright (c) 2025-2026, J. A. Corbal <jacorbal@gmail.com>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * “Software”), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 #ifndef ICONIFY_H
@@ -53,6 +60,7 @@ typedef struct {
     Display *display;       /**< X Display */
     Window window_orig;     /**< Window associated to the icon */
     Window window;          /**< Icon window */
+    Window tooltip_window;  /**< Tooltip window */
     Pixmap pixmap;          /**< Icon pixmap */
     char *prog_name;        /**< Name of the associated program */
     char *path;             /**< Icon path */
@@ -65,6 +73,8 @@ typedef struct {
     unsigned long fg;       /**< Text foreground color */
     unsigned long fc;       /**< Frame color */
     Bool show_text;         /**< Display text under icon */
+    Bool show_tooltip;      /**< Display tooltip */
+    Bool is_tooltip_visible;
     long int desktop_cur;   /**< Desktop the icon is now */
 } icon_td;
 
@@ -73,24 +83,25 @@ typedef struct {
 /**
  * @brief Initialize a new icon
  *
- * @param display     Display where to initialize this icon
- * @param window_orig Associated window to the new icon
- * @param pixmap      Icon pixmap
- * @param prog_name   Name of the program running on the associated window
- * @param path        Path to the icon file (xpm)
- * @param border      Icon border (px)
- * @param width       Icon width (px)
- * @param height      Icon height (px)
- * @param text_bg     Icon text background color
- * @param text_fg     Icon text foreground color
- * @param frame_col   Frame color
- * @param show_text   Show text if @c true, or otherwise
+ * @param display      Display where to initialize this icon
+ * @param window_orig  Associated window to the new icon
+ * @param pixmap       Icon pixmap
+ * @param prog_name    Name of the program running on the associated window
+ * @param path         Path to the icon file (xpm)
+ * @param border       Icon border (px)
+ * @param width        Icon width (px)
+ * @param height       Icon height (px)
+ * @param text_bg      Icon text background color
+ * @param text_fg      Icon text foreground color
+ * @param frame_col    Frame color
+ * @param show_text    Show text under icon if @c true, or otherwise
+ * @param show_tooltip Show tooltip if @c true, or otherwise
  */
 icon_td *icon_init(Display *display, Window window_orig,
         Pixmap pixmap, char *prog_name, const char *path,
         unsigned int border, unsigned int width, unsigned int height,
         unsigned long text_bg, unsigned long text_fg,
-        unsigned long frame_col, Bool show_text);
+        unsigned long frame_col, Bool show_text, Bool show_tooltip);
 
 /**
  * @brief Destroy icon structure and free resources

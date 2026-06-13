@@ -17,21 +17,28 @@
  * appearance and behavior.
  */
 /*
- * ISC License
- * Copyright (c) 2025, J. A. Corbal <jacorbal@gmail.com>
- *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
- * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
- * THIS SOFTWARE.
+ * The MIT License (MIT)
+ * 
+ * Copyright (c) 2025-2026, J. A. Corbal <jacorbal@gmail.com>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * “Software”), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+ * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
 /* Enable features from the POSIX.1-2008 standard */
@@ -66,8 +73,11 @@ static inline void s_help_show(FILE *fp, const char basename[])
 {
     fprintf(fp, "Usage: %s [<options>] <window_id>\n", basename);
     fprintf(fp, "Options:\n");
-    fprintf(fp, "   -h          This help\n");
+    fprintf(fp, "   -h          This help and exit\n");
+    fprintf(fp, "   -v          Display version and exit\n");
+    fprintf(fp, "\n");
     fprintf(fp, "   -t          Disable text caption\n");
+    fprintf(fp, "   -T          Enable tooltips (experimental)\n");
     fprintf(fp, "   -n <name>   Name to show below the icon\n");
     fprintf(fp, "   -i <icon>   Path to the icon pixmap (xpm/xbm)\n");
     fprintf(fp, "   -W <width>  Icon width in pixels\n");
@@ -78,6 +88,16 @@ static inline void s_help_show(FILE *fp, const char basename[])
     fprintf(fp, "   -f <fc>     Frame color when border is active\n");
     fprintf(fp, "   -b <border> Border width in pixels, o 0 for none\n");
     fprintf(fp, "\n");
+}
+
+
+/* Show version */
+static inline void s_version_show(FILE *fp, const char basename[])
+{
+    fprintf(fp, "%s -- %s, version %s\n", basename,
+        PROG_NAME_LONG, PROG_VERSION);
+    fprintf(fp, "Licensed under the %s\n", PROG_LICENSE);
+    fprintf(fp, "%s\n", PROG_COPYRIGHT);
 }
 
 
@@ -94,17 +114,22 @@ int main(int argc, char *argv[])
     unsigned long fg = DEFAULT_TEXT_FG;
     unsigned long fc = DEFAULT_TEXT_FC;
     Bool show_text = True;
+    Bool show_tooltip = False;
     Display *display;
     Window window_orig;
     Pixmap pixmap;
     int opt;
 
     setlocale(LC_ALL, "");
-    while ((opt = getopt(argc, argv, "hn:W:H:i:s:F:B:f:b:t")) != -1) {
+    while ((opt = getopt(argc, argv, "hvn:W:H:i:s:F:B:f:b:tT")) != -1) {
         switch (opt) {
             case 'h':
                 s_help_show(stdout, argv[0]);
                 exit(EXIT_SUCCESS);
+            case 'v':
+                s_version_show(stdout, argv[0]);
+                exit(EXIT_SUCCESS);
+                break;
             case 'n':
                 prog_name = optarg;
                 break;
@@ -135,6 +160,9 @@ int main(int argc, char *argv[])
                 break;
             case 't':
                 show_text = False;
+                break;
+            case 'T':
+                show_tooltip = True;
                 break;
             default:
                 s_help_show(stderr, argv[0]);
@@ -170,7 +198,7 @@ int main(int argc, char *argv[])
     icon = icon_init(display, window_orig, pixmap, prog_name, path,
             (unsigned int) border,
             (unsigned int) width, (unsigned int) height,
-            bg, fg, fc, show_text);
+            bg, fg, fc, show_text, show_tooltip);
     if (!icon) {
         fprintf(stderr, "Error: could not initialize icon\n");
         XFreePixmap(display, pixmap);
